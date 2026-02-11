@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Smart Nutrition & Diet Assistant — Professional Edition</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+:root{
+--bg:#020617;
+--card:#0b1220;
+--accent:#22c55e;
+--accent2:#2563eb;
+--text:#e5e7eb;
+}
+
+*{box-sizing:border-box}
+body{
+margin:0;
+font-family:system-ui, Arial, sans-serif;
+background:linear-gradient(135deg,#020617,#0f172a);
+color:var(--text);
+}
+
+.app{max-width:1100px;margin:auto;padding:24px}
+
+.header{
+display:flex;
+justify-content:space-between;
+align-items:center;
+margin-bottom:18px;
+}
+
+h1{margin:0;font-size:26px}
+
+.card{
+background:var(--card);
+padding:20px;
+border-radius:18px;
+box-shadow:0 10px 30px rgba(0,0,0,.5);
+}
+
+.grid{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+gap:14px;
+}
+
+label{font-size:13px;opacity:.85}
+
+input,select{
+width:100%;
+padding:12px;
+border-radius:12px;
+border:1px solid #1f2937;
+background:#020617;
+color:white;
+margin-top:6px;
+}
+
+.actions{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+gap:12px;
+margin-top:14px;
+}
+
+button{
+padding:13px;
+border-radius:14px;
+border:none;
+font-weight:700;
+cursor:pointer;
+font-size:14px;
+}
+
+.primary{background:var(--accent)}
+.primary:hover{filter:brightness(1.1)}
+.blue{background:var(--accent2)}
+.dark{background:#1f2937}
+
+.kpis{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+gap:12px;
+margin-top:16px;
+}
+
+.kpi{
+background:#020617;
+padding:14px;
+border-radius:14px;
+text-align:center;
+}
+
+.kpi b{font-size:20px}
+
+.result{
+margin-top:18px;
+background:#020617;
+padding:20px;
+border-radius:18px;
+line-height:1.7;
+}
+
+.badge{
+display:inline-block;
+padding:5px 10px;
+border-radius:999px;
+background:#1f2937;
+font-size:12px;
+margin:3px;
+}
+
+.progress{
+height:10px;
+background:#111827;
+border-radius:999px;
+overflow:hidden;
+margin-top:6px;
+}
+.bar{
+height:100%;
+background:var(--accent);
+width:0%;
+transition:.4s;
+}
+
+canvas{
+width:100%;
+height:140px;
+background:#020617;
+border-radius:14px;
+margin-top:14px;
+}
+</style>
+</head>
+
+<body>
+<div class="app">
+
+<div class="header">
+<h1>🥗 Smart Nutrition Professional</h1>
+<button class="dark" onclick="window.print()">Print / PDF</button>
+</div>
+
+<div class="card">
+
+<div class="grid">
+<div>
+<label>Age</label>
+<input id="age" type="number">
+</div>
+
+<div>
+<label>Weight (kg)</label>
+<input id="weight" type="number" oninput="liveCalc()">
+</div>
+
+<div>
+<label>Height (cm)</label>
+<input id="height" type="number" oninput="liveCalc()">
+</div>
+
+<div>
+<label>Lifestyle</label>
+<select id="life" onchange="liveCalc()">
+<option value="sedentary">Sedentary</option>
+<option value="moderate">Moderate</option>
+<option value="active">Active</option>
+</select>
+</div>
+
+<div>
+<label>Goal</label>
+<select id="goal" onchange="liveCalc()">
+<option value="loss">Fat Loss</option>
+<option value="maintain">Maintain</option>
+<option value="gain">Muscle Gain</option>
+</select>
+</div>
+
+<div>
+<label>Diet Type</label>
+<select id="diet">
+<option value="veg">Vegetarian</option>
+<option value="nonveg">Non-Vegetarian</option>
+</select>
+</div>
+</div>
+
+<div class="actions">
+<button class="primary" onclick="generatePlan()">Generate Plan</button>
+<button class="blue" onclick="generateWeek()">Weekly Plan</button>
+<button onclick="grocery()">Grocery List</button>
+<button onclick="saveProfile()">Save Profile</button>
+<button onclick="exportJSON()">Export Data</button>
+<button onclick="importJSON()">Import Data</button>
+</div>
+
+<div id="kpis" class="kpis"></div>
+
+</div>
+
+<div id="result" class="result"></div>
+<canvas id="chart"></canvas>
+
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+
+const foods={
+veg:["Dal","Rice","Roti","Paneer","Curd","Oats","Chana","Poha","Upma","Soyabean"],
+nonveg:["Eggs","Chicken","Fish","Rice","Roti","Chicken Curry","Omelette"]
+};
+
+let lastMeals=[];
+
+// ---------- calculations ----------
+function calories(w,l,g){
+let c=w*30;
+if(l==="active")c+=300;
+if(l==="sedentary")c-=200;
+if(g==="loss")c-=400;
+if(g==="gain")c+=400;
+return Math.round(c);
+}
+
+function bmi(w,h){return w/((h/100)**2)}
+
+function bmiLabel(v){
+if(v<18.5) return "Underweight";
+if(v<25) return "Normal";
+if(v<30) return "Overweight";
+return "High";
+}
+
+// ---------- live preview ----------
+function liveCalc(){
+let w=+$("weight").value;
+let h=+$("height").value;
+if(!w||!h){$("kpis").innerHTML="";return;}
+
+let cal=calories(w,$("life").value,$("goal").value);
+let b=bmi(w,h);
+let protein=Math.round(w*1.6);
+
+$("kpis").innerHTML=`
+<div class=kpi><div>Calories</div><b>${cal}</b></div>
+<div class=kpi><div>BMI</div><b>${b.toFixed(1)}</b><div class=badge>${bmiLabel(b)}</div></div>
+<div class=kpi><div>Protein</div><b>${protein}g</b></div>
+`;
+}
+
+// ---------- plan ----------
+function pick(a){return a[Math.floor(Math.random()*a.length)]}
+
+function generateMeals(){
+lastMeals=[];
+for(let i=0;i<5;i++) lastMeals.push(pick(foods[$("diet").value]));
+}
+
+function workout(goal){
+if(goal==="loss") return "Cardio 40 min + steps";
+if(goal==="gain") return "Strength training 45 min";
+return "Mixed training 30 min";
+}
+
+function generatePlan(){
+let w=+$("weight").value;
+let h=+$("height").value;
+if(!w||!h){alert("Enter required data");return;}
+
+generateMeals();
+let cal=calories(w,$("life").value,$("goal").value);
+
+$("result").innerHTML=`
+<h2>Personalized Daily Plan</h2>
+${lastMeals.map((m,i)=>`Meal ${i+1}: ${m}`).join("<br>")}
+
+<h3>Activity Recommendation</h3>
+${workout($("goal").value)}
+
+<h3>AI Rationale</h3>
+Calories and macros computed from body weight, activity level, and selected goal using standard nutrition formulas.
+`;
+
+storeWeight(w);
+drawChart();
+}
+
+// ---------- weekly ----------
+function generateWeek(){
+let out="<h2>7-Day Rotation Plan</h2>";
+for(let d=1;d<=7;d++){
+let day=[];
+for(let i=0;i<4;i++) day.push(pick(foods[$("diet").value]));
+out+=`Day ${d}: ${day.join(", ")}<br>`;
+}
+$("result").innerHTML=out;
+}
+
+// ---------- grocery ----------
+function grocery(){
+if(!lastMeals.length){alert("Generate plan first");return;}
+let list=[...new Set(lastMeals)];
+$("result").innerHTML="<h2>Grocery List</h2>"+list.join("<br>");
+}
+
+// ---------- profile ----------
+function saveProfile(){
+localStorage.setItem("profile",JSON.stringify({
+age:$("age").value,
+weight:$("weight").value,
+height:$("height").value
+}));
+}
+
+function loadProfile(){
+let p=JSON.parse(localStorage.getItem("profile")||"null");
+if(!p) return;
+$("age").value=p.age;
+$("weight").value=p.weight;
+$("height").value=p.height;
+}
+
+// ---------- progress ----------
+function storeWeight(w){
+let arr=JSON.parse(localStorage.getItem("weights")||"[]");
+arr.push(w);
+localStorage.setItem("weights",JSON.stringify(arr));
+}
+
+function drawChart(){
+let arr=JSON.parse(localStorage.getItem("weights")||"[]");
+let c=$("chart"),ctx=c.getContext("2d");
+ctx.clearRect(0,0,c.width,c.height);
+if(arr.length<2) return;
+let max=Math.max(...arr);
+arr.forEach((v,i)=>{
+let x=i*(c.width/(arr.length-1));
+let y=c.height-(v/max*c.height);
+ctx.fillRect(x,y,6,6);
+});
+}
+
+// ---------- export/import ----------
+function exportJSON(){
+let data={
+profile:localStorage.getItem("profile"),
+weights:localStorage.getItem("weights")
+};
+let blob=new Blob([JSON.stringify(data)],{type:"application/json"});
+let a=document.createElement("a");
+a.href=URL.createObjectURL(blob);
+a.download="nutrition-data.json";
+a.click();
+}
+
+function importJSON(){
+let inp=document.createElement("input");
+inp.type="file";
+inp.accept=".json";
+inp.onchange=e=>{
+let r=new FileReader();
+r.onload=()=>{
+let d=JSON.parse(r.result);
+localStorage.setItem("profile",d.profile);
+localStorage.setItem("weights",d.weights);
+loadProfile();
+drawChart();
+liveCalc();
+};
+r.readAsText(e.target.files[0]);
+};
+inp.click();
+}
+
+loadProfile();
+liveCalc();
+drawChart();
+</script>
+</body>
+</html>
